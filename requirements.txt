@@ -1,0 +1,26 @@
+# Core training and inference
+torch
+torchvision
+mamba-ssm
+timm
+numpy
+Pillow
+tqdm
+
+# Visualization and image processing
+visdom
+matplotlib
+scikit-image
+scipy
+opencv-python
+dominate
+imageio
+
+# Evaluation utilities
+pytorch-fid
+tensorflow
+
+# Dataset download utilities
+requests
+beautifulsoup4
+lxml
