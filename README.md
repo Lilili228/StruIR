@@ -105,7 +105,7 @@ StruIR/
 |   |-- base_options.py
 |   |-- train_options.py
 |   `-- test_options.py
-|-- lpips/                           # LPIPS implementation and AlexNet weights
+|-- lpips/                           # LPIPS and AlexNet calibration weights
 |-- util/                            # Visualization and image utilities
 |-- train.py                         # Stage-2 training entry point
 |-- test.py                          # Image generation and qualitative testing
@@ -115,23 +115,55 @@ StruIR/
 `-- requirements.txt                # Python dependencies
 ```
 
-## Installation
+## Environment Setup
 
-Python 3.10 and a CUDA-enabled PyTorch environment are recommended.
+Use Linux (x86-64), Python 3.10, and an NVIDIA GPU with a CUDA-compatible driver for the full training and evaluation workflow. The paper reports experiments on one NVIDIA GeForce RTX 4090. The versions below are an installation example.
+
+### 1. Create the Conda environment
+
+Run the following commands from the repository root.
 
 ```bash
 conda create -n struir python=3.10 -y
 conda activate struir
 ```
 
-Install a PyTorch build compatible with your CUDA version, followed by the remaining dependencies:
+### 2. Install PyTorch and the training dependencies
+
+This example uses PyTorch 2.9.1 and TorchVision 0.24.1 with CUDA 12.6. For a different CUDA build, select a matching PyTorch and TorchVision pair supported by your NVIDIA driver. [PyTorch installation commands](https://pytorch.org/get-started/previous-versions/#v291)
 
 ```bash
-pip install torch torchvision
-pip install -r requirements.txt
+python -m pip install torch==2.9.1 torchvision==0.24.1 --index-url https://download.pytorch.org/whl/cu126
+python -m pip install setuptools wheel packaging ninja
+python -m pip install --no-build-isolation mamba-ssm==2.3.2.post1
+python -m pip install -r requirements.txt
 ```
 
-The main dependencies include PyTorch, TorchVision, Mamba-SSM, timm, NumPy, Pillow, SciPy, OpenCV, Visdom, TensorFlow, and pytorch-fid. LPIPS code and AlexNet v0.1 weights are included in this repository.
+Stage-2 training uses the Mamba-SSM `selective_scan_cuda` extension. Install Mamba-SSM after PyTorch so its build can use the PyTorch and CUDA configuration already in the environment. If a matching prebuilt wheel is unavailable, the source build requires a compatible CUDA Toolkit with `nvcc` and a supported C++ compiler. [Mamba-SSM release](https://github.com/state-spaces/mamba/releases/tag/v2.3.2.post1)
+
+### 3. Verify the installation
+
+Check dependency consistency, GPU visibility, and the selective scan used by the Stage-2 discriminator. The check runs without a dataset or checkpoint.
+
+```bash
+python -m pip check
+nvidia-smi
+python - <<'PY'
+import torch
+from models.unetgan.ISCMD import SS2D
+
+assert torch.cuda.is_available(), "PyTorch cannot access a CUDA GPU"
+print(f"PyTorch {torch.__version__}, CUDA {torch.version.cuda}, {torch.cuda.get_device_name(0)}")
+
+scan = SS2D(d_model=16).cuda().eval()
+with torch.inference_mode():
+    output = scan(torch.randn(1, 8, 8, 16, device="cuda"))
+assert output.shape == (1, 8, 8, 16)
+print("CUDA selective scan OK")
+PY
+```
+
+Stage-1 pretraining and generator-only inference do not call the selective scan. Quantitative evaluation uses TensorFlow for PSNR and `pytorch-fid` for FID. The repository includes the LPIPS v0.1 calibration weights for AlexNet. The first evaluation run may download the AlexNet backbone and FID Inception weights if they are absent from the PyTorch cache. [TorchVision AlexNet](https://docs.pytorch.org/vision/main/models/generated/torchvision.models.alexnet.html) · [FID Inception weights](https://github.com/mseitzer/pytorch-fid/blob/master/src/pytorch_fid/inception.py)
 
 ## Dataset Preparation
 
@@ -362,3 +394,9 @@ This command automatically loads:
 ```text
 ./checkpoints/DRTV30K_stage1/encoders_best.pth
 ```
+
+## License
+
+The original StruIR code is licensed under the [MIT License](LICENSE).
+Bundled third-party components are subject to their respective licenses.
+See [Third-Party Notices](THIRD_PARTY_NOTICES.md) for details.
